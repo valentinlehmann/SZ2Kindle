@@ -17,4 +17,7 @@ echo "Running initial check …"
 cd /app && python sz2kindle.py || true
 
 echo "Starting cron daemon …"
-exec cron -f
+cron -f &
+CRON_PID=$!
+trap "kill $CRON_PID; exit 0" TERM INT
+wait $CRON_PID

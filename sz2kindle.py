@@ -33,15 +33,48 @@ logging.basicConfig(
 log = logging.getLogger("sz2kindle")
 
 
+ENV_MAP = {
+    "SZ_EMAIL":       ("sz", "email"),
+    "SZ_PASSWORD":    ("sz", "password"),
+    "SZ_UTP_TOKEN":   ("sz", "utp_token"),
+    "SZ_TAC_TOKEN":   ("sz", "tac_token"),
+    "SMTP_HOST":      ("smtp", "host"),
+    "SMTP_PORT":      ("smtp", "port"),
+    "SMTP_USERNAME":  ("smtp", "username"),
+    "SMTP_PASSWORD":  ("smtp", "password"),
+    "SMTP_FROM":      ("smtp", "from"),
+    "KINDLE_TO":      ("kindle", "to"),
+}
+
+
 def load_config() -> configparser.ConfigParser:
-    if not CONFIG_FILE.exists():
+    config = configparser.ConfigParser()
+    if CONFIG_FILE.exists():
+        config.read(CONFIG_FILE)
+        log.info("Loaded config from %s", CONFIG_FILE)
+
+    # Env vars override config.ini values.
+    for env_key, (section, key) in ENV_MAP.items():
+        value = os.environ.get(env_key, "").strip()
+        if value:
+            if not config.has_section(section):
+                config.add_section(section)
+            config.set(section, key, value)
+
+    # Verify minimum required config is present.
+    has_credentials = (
+        config.get("sz", "email", fallback="") and config.get("sz", "password", fallback="")
+    ) or (
+        config.get("sz", "utp_token", fallback="") and config.get("sz", "tac_token", fallback="")
+    )
+    has_smtp = config.get("smtp", "host", fallback="") and config.get("kindle", "to", fallback="")
+
+    if not has_credentials or not has_smtp:
         log.error(
-            "Config file not found: %s — copy config.ini.example and fill in your credentials.",
-            CONFIG_FILE,
+            "Missing config. Provide config.ini or set env vars (SZ_EMAIL, SZ_PASSWORD, SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM, KINDLE_TO)."
         )
         sys.exit(1)
-    config = configparser.ConfigParser()
-    config.read(CONFIG_FILE)
+
     return config
 
 

@@ -6,10 +6,25 @@ services:
       - TZ=Europe/Berlin
       # Cron expression — default: every day at 06:00.
       - SZ2KINDLE_CRON=0 6 * * *
+      # SZ credentials (alternative to config.ini).
+      - SZ_EMAIL=
+      - SZ_PASSWORD=
+      # Optional: manual Piano cookies.
+      # - SZ_UTP_TOKEN=
+      # - SZ_TAC_TOKEN=
+      # SMTP settings.
+      - SMTP_HOST=
+      - SMTP_PORT=587
+      - SMTP_USERNAME=
+      - SMTP_PASSWORD=
+      - SMTP_FROM=
+      # Kindle recipient.
+      - KINDLE_TO=
     volumes:
-      # Mount config and persistent data (session, sent tracking).
-      - ./config.ini:/data/config.ini:ro
+      # Persistent data (session, sent tracking).
       - sz2kindle-data:/data
+      # Optional: mount config.ini instead of using env vars.
+      # - ./config.ini:/data/config.ini:ro
 
 volumes:
   sz2kindle-data:

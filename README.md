@@ -8,28 +8,29 @@ This script does exactly that. It logs into [reader.sueddeutsche.de](https://rea
 
 ## Setup
 
-1. Clone the repo and copy the example config:
-   ```bash
-   cp config.ini.example config.ini
-   ```
+### Docker (recommended)
 
-2. Fill in `config.ini` with your SZ-Plus credentials, SMTP server, and Kindle email address.
+Fill in the environment variables in `compose.yaml` and run:
 
-3. Run locally:
-   ```bash
-   pip install -r requirements.txt
-   playwright install firefox
-   python sz2kindle.py
-   ```
+```bash
+docker compose up -d
+```
 
-   Or with Docker (runs daily at 6 AM Berlin time):
-   ```bash
-   docker compose up -d
-   ```
+Alternatively, mount a `config.ini` instead of using env vars (see below).
+
+### Local
+
+```bash
+cp config.ini.example config.ini
+# Fill in config.ini
+pip install -r requirements.txt
+playwright install chromium
+python sz2kindle.py
+```
 
 ## How it works
 
-1. **Authenticate** — Reuses a cached session if still valid. Otherwise launches a headless Firefox via Playwright to log in through the Piano ID SSO iframe. Tokens are saved to `session.json` for reuse (~20 day lifetime).
+1. **Authenticate** — Reuses a cached session if still valid. Otherwise launches headless Chromium via Playwright to log in through the Piano ID SSO iframe. Tokens are saved to `session.json` for reuse (~20 day lifetime).
 
 2. **Find the latest edition** — Parses the reader page HTML to locate the newest "Süddeutsche Zeitung" ePub download link.
 
@@ -41,18 +42,20 @@ This script does exactly that. It logs into [reader.sueddeutsche.de](https://rea
 
 ## Configuration
 
-| Section    | Key        | Description                          |
-|------------|------------|--------------------------------------|
-| `[sz]`     | `email`    | SZ-Plus login email                  |
-| `[sz]`     | `password` | SZ-Plus login password               |
-| `[sz]`     | `utp_token`| Optional: manual `__utp` cookie      |
-| `[sz]`     | `tac_token`| Optional: manual `__tac` cookie      |
-| `[smtp]`   | `host`     | SMTP server hostname                 |
-| `[smtp]`   | `port`     | SMTP port (typically 587)            |
-| `[smtp]`   | `username` | SMTP login username                  |
-| `[smtp]`   | `password` | SMTP login password                  |
-| `[smtp]`   | `from`     | Sender email address                 |
-| `[kindle]` | `to`       | Kindle device email address          |
+Configure via environment variables, `config.ini`, or both. Env vars take precedence.
+
+| Env var          | config.ini equivalent   | Description                          |
+|------------------|-------------------------|--------------------------------------|
+| `SZ_EMAIL`       | `[sz] email`            | SZ-Plus login email                  |
+| `SZ_PASSWORD`    | `[sz] password`         | SZ-Plus login password               |
+| `SZ_UTP_TOKEN`   | `[sz] utp_token`        | Optional: manual `__utp` cookie      |
+| `SZ_TAC_TOKEN`   | `[sz] tac_token`        | Optional: manual `__tac` cookie      |
+| `SMTP_HOST`      | `[smtp] host`           | SMTP server hostname                 |
+| `SMTP_PORT`      | `[smtp] port`           | SMTP port (typically 587)            |
+| `SMTP_USERNAME`  | `[smtp] username`       | SMTP login username                  |
+| `SMTP_PASSWORD`  | `[smtp] password`       | SMTP login password                  |
+| `SMTP_FROM`      | `[smtp] from`           | Sender email address                 |
+| `KINDLE_TO`      | `[kindle] to`           | Kindle device email address          |
 
 ## Docker
 
@@ -61,10 +64,11 @@ The container uses cron to schedule runs — it idles between executions rather 
 - **Default schedule**: daily at 06:00 (Berlin time)
 - **Override**: set `SZ2KINDLE_CRON` in `compose.yaml` to any cron expression
 - **Persistent data**: `session.json` and `sent.json` live in a Docker volume so sessions survive restarts
+- **Config**: use env vars in `compose.yaml`, or uncomment the volume mount to use a `config.ini` file instead
 
 ## Requirements
 
 - Python 3.12+
 - `curl` (system)
-- Firefox (installed automatically by `playwright install firefox`)
+- Chromium (installed automatically by `playwright install chromium`)
 - An active [SZ-Plus](https://www.sueddeutsche.de/szplus) subscription with ePaper access
