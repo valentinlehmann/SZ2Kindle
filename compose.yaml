@@ -1,6 +1,6 @@
 services:
   sz2kindle:
-    build: .
+    image: ghcr.io/valentinlehmann/sz2kindle:main
     restart: unless-stopped
     environment:
       - TZ=Europe/Berlin
