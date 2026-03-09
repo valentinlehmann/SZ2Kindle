@@ -149,7 +149,7 @@ def login_via_browser(email: str, password: str) -> dict[str, str]:
     log.info("Logging in via headless browser …")
 
     with sync_playwright() as p:
-        browser = p.firefox.launch(headless=True)
+        browser = p.chromium.launch(headless=True)
         context = browser.new_context()
         page = context.new_page()
 
