@@ -1,0 +1,18 @@
+[sz]
+email = your_sz_email@example.com
+password = your_sz_password
+# Optional:
+# Paste your Piano cookies from browser DevTools → Application → Cookies → .sueddeutsche.de
+# These are valid for ~20 days. Required if automatic login fails.
+# utp_token =
+# tac_token =
+
+[smtp]
+host = smtp.example.com
+port = 587
+username = your_smtp_user@example.com
+password = your_smtp_password
+from = your_smtp_user@example.com
+
+[kindle]
+to = your_kindle_email@kindle.com

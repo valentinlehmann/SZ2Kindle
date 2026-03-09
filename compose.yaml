@@ -1,0 +1,15 @@
+services:
+  sz2kindle:
+    build: .
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Berlin
+      # Cron expression — default: every day at 06:00.
+      - SZ2KINDLE_CRON=0 6 * * *
+    volumes:
+      # Mount config and persistent data (session, sent tracking).
+      - ./config.ini:/data/config.ini:ro
+      - sz2kindle-data:/data
+
+volumes:
+  sz2kindle-data:

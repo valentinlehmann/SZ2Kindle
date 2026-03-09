@@ -1,0 +1,9 @@
+config.ini
+session.json
+sent.json
+__pycache__/
+*.pyc
+*.epub
+.venv/
+.claude/
+.idea/
