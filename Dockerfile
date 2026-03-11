@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt && \
     playwright install --with-deps chromium
 
 COPY sz2kindle.py .
+COPY strategies/ strategies/
 
 # Cron schedule: every day at 6:00 AM (container timezone).
 # Override with SZ2KINDLE_CRON env var.

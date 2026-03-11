@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-SZ2Kindle downloads the daily "Süddeutsche Zeitung" ePub from `reader.sueddeutsche.de` and emails it to a Kindle address. Single-script Python tool (`sz2kindle.py`) with Docker support for scheduled daily runs.
+SZ2Kindle downloads the daily "Süddeutsche Zeitung" ePub from `reader.sueddeutsche.de` and delivers it via a configurable strategy (email to Kindle, WebDAV upload, etc.). Main script `sz2kindle.py` with pluggable delivery strategies in `strategies/` and Docker support for scheduled daily runs.
 
 ## Running
 
@@ -20,11 +20,18 @@ python sz2kindle.py
 docker compose up -d
 ```
 
-Configuration goes in `config.ini` (see `config.ini.example`). Sections: `[sz]` (credentials/tokens), `[smtp]` (mail server), `[kindle]` (recipient).
+Configuration goes in `config.ini` (see `config.ini.example`). Sections: `[general]` (strategy selection), `[sz]` (credentials/tokens), `[smtp]` (mail server), `[kindle]` (recipient), `[webdav]` (WebDAV server).
 
 ## Architecture
 
-`sz2kindle.py` is the single entry point. Flow: authenticate → find latest epub URL → check if already sent → download → email → mark as sent.
+`sz2kindle.py` is the entry point. Flow: authenticate → find latest epub URL → check if already delivered (via strategy) → download → deliver (via strategy).
+
+### Delivery strategies
+
+Pluggable delivery strategies live in `strategies/`. Each strategy implements `DeliveryStrategy` (base class in `strategies/__init__.py`) with two methods: `already_delivered(filename)` and `deliver(epub_path)`. Strategies register themselves via the `@register("name")` decorator. Select via `[general] strategy = name` in config or `SZ2KINDLE_STRATEGY` env var.
+
+- **email** (`strategies/email.py`): Sends epub via SMTP to a Kindle address. Tracks sent files in `sent.json`.
+- **webdav** (`strategies/webdav.py`): Uploads epub to a WebDAV server via curl PUT. Checks existence via HEAD request (no local state file).
 
 ### Key design decisions
 
@@ -32,7 +39,7 @@ Configuration goes in `config.ini` (see `config.ini.example`). Sections: `[sz]` 
 - **Authentication**: Piano ID SSO (`auth.sueddeutsche.de`) with two cookies: `__utp` (identity JWT, ~20 day expiry) and `__tac` (access/entitlement JWT). Login automated via Playwright headless Firefox since the Piano login form lives in a JS-driven iframe that can't be replicated with plain HTTP.
 - **Login fallback chain** in `get_tokens()`: saved session → manual tokens from config.ini → Playwright browser login.
 - **Session validation**: `is_logged_in()` probes an actual epub download URL (not CSS classes, which are always `c-button--disabled` in raw HTML — JS removes them client-side).
-- **Sent tracking**: `sent.json` records filenames of already-emailed epubs. Checked before downloading to avoid duplicate sends.
+- **Sent tracking** (email strategy): `sent.json` records filenames of already-emailed epubs. Checked before downloading to avoid duplicate sends.
 - **Data directory**: `SZ2KINDLE_DATA_DIR` env var controls where `config.ini`, `session.json`, and `sent.json` live. Defaults to the script's directory; set to `/data` in Docker.
 
 ### Persistent files (all gitignored)

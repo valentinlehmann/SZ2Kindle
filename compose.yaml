@@ -6,20 +6,26 @@ services:
       - TZ=Europe/Berlin
       # Cron expression — default: every day at 06:00.
       - SZ2KINDLE_CRON=0 6 * * *
+      # Delivery strategy: "email" (default) or "webdav".
+      # - SZ2KINDLE_STRATEGY=email
       # SZ credentials (alternative to config.ini).
       - SZ_EMAIL=
       - SZ_PASSWORD=
       # Optional: manual Piano cookies.
       # - SZ_UTP_TOKEN=
       # - SZ_TAC_TOKEN=
-      # SMTP settings.
+      # SMTP settings (for email strategy).
       - SMTP_HOST=
       - SMTP_PORT=587
       - SMTP_USERNAME=
       - SMTP_PASSWORD=
       - SMTP_FROM=
-      # Kindle recipient.
+      # Kindle recipient (for email strategy).
       - KINDLE_TO=
+      # WebDAV settings (for webdav strategy).
+      # - WEBDAV_URL=
+      # - WEBDAV_USERNAME=
+      # - WEBDAV_PASSWORD=
     volumes:
       # Persistent data (session, sent tracking).
       - sz2kindle-data:/data

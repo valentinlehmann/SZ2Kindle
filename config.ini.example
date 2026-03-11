@@ -1,3 +1,7 @@
+[general]
+# Delivery strategy: "email" (default) or "webdav"
+# strategy = email
+
 [sz]
 email = your_sz_email@example.com
 password = your_sz_password
@@ -7,6 +11,7 @@ password = your_sz_password
 # utp_token =
 # tac_token =
 
+# --- Email strategy (default) ---
 [smtp]
 host = smtp.example.com
 port = 587
@@ -16,3 +21,9 @@ from = your_smtp_user@example.com
 
 [kindle]
 to = your_kindle_email@kindle.com
+
+# --- WebDAV strategy ---
+# [webdav]
+# url = https://your-webdav-server.com/remote.php/dav/files/user/SZ
+# username = your_webdav_user
+# password = your_webdav_password

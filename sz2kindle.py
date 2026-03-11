@@ -5,14 +5,9 @@ import configparser
 import json
 import logging
 import os
-import smtplib
 import subprocess
 import sys
 import tempfile
-from email import encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -23,7 +18,6 @@ READER_URL = "https://reader.sueddeutsche.de"
 DATA_DIR = Path(os.environ.get("SZ2KINDLE_DATA_DIR", Path(__file__).parent))
 SESSION_FILE = DATA_DIR / "session.json"
 CONFIG_FILE = DATA_DIR / "config.ini"
-SENT_FILE = DATA_DIR / "sent.json"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -34,16 +28,20 @@ log = logging.getLogger("sz2kindle")
 
 
 ENV_MAP = {
-    "SZ_EMAIL":       ("sz", "email"),
-    "SZ_PASSWORD":    ("sz", "password"),
-    "SZ_UTP_TOKEN":   ("sz", "utp_token"),
-    "SZ_TAC_TOKEN":   ("sz", "tac_token"),
-    "SMTP_HOST":      ("smtp", "host"),
-    "SMTP_PORT":      ("smtp", "port"),
-    "SMTP_USERNAME":  ("smtp", "username"),
-    "SMTP_PASSWORD":  ("smtp", "password"),
-    "SMTP_FROM":      ("smtp", "from"),
-    "KINDLE_TO":      ("kindle", "to"),
+    "SZ2KINDLE_STRATEGY": ("general", "strategy"),
+    "SZ_EMAIL":           ("sz", "email"),
+    "SZ_PASSWORD":        ("sz", "password"),
+    "SZ_UTP_TOKEN":       ("sz", "utp_token"),
+    "SZ_TAC_TOKEN":       ("sz", "tac_token"),
+    "SMTP_HOST":          ("smtp", "host"),
+    "SMTP_PORT":          ("smtp", "port"),
+    "SMTP_USERNAME":      ("smtp", "username"),
+    "SMTP_PASSWORD":      ("smtp", "password"),
+    "SMTP_FROM":          ("smtp", "from"),
+    "KINDLE_TO":          ("kindle", "to"),
+    "WEBDAV_URL":         ("webdav", "url"),
+    "WEBDAV_USERNAME":    ("webdav", "username"),
+    "WEBDAV_PASSWORD":    ("webdav", "password"),
 }
 
 
@@ -67,13 +65,27 @@ def load_config() -> configparser.ConfigParser:
     ) or (
         config.get("sz", "utp_token", fallback="") and config.get("sz", "tac_token", fallback="")
     )
-    has_smtp = config.get("smtp", "host", fallback="") and config.get("kindle", "to", fallback="")
 
-    if not has_credentials or not has_smtp:
-        log.error(
-            "Missing config. Provide config.ini or set env vars (SZ_EMAIL, SZ_PASSWORD, SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM, KINDLE_TO)."
-        )
-        sys.exit(1)
+    strategy = config.get("general", "strategy", fallback="email")
+
+    if strategy == "email":
+        has_delivery = config.get("smtp", "host", fallback="") and config.get("kindle", "to", fallback="")
+        if not has_credentials or not has_delivery:
+            log.error(
+                "Missing config. Provide config.ini or set env vars (SZ_EMAIL, SZ_PASSWORD, SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM, KINDLE_TO)."
+            )
+            sys.exit(1)
+    elif strategy == "webdav":
+        has_delivery = bool(config.get("webdav", "url", fallback=""))
+        if not has_credentials or not has_delivery:
+            log.error(
+                "Missing config. Provide config.ini or set env vars (SZ_EMAIL, SZ_PASSWORD, WEBDAV_URL)."
+            )
+            sys.exit(1)
+    else:
+        if not has_credentials:
+            log.error("Missing SZ credentials in config.")
+            sys.exit(1)
 
     return config
 
@@ -340,85 +352,32 @@ def download_epub(tokens: dict[str, str], url: str, dest_dir: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Sent tracking
-# ---------------------------------------------------------------------------
-
-
-def load_sent() -> set[str]:
-    """Load the set of already-sent epub filenames."""
-    if not SENT_FILE.exists():
-        return set()
-    try:
-        return set(json.loads(SENT_FILE.read_text()))
-    except (json.JSONDecodeError, TypeError):
-        return set()
-
-
-def mark_sent(filename: str) -> None:
-    """Add a filename to the sent tracking file."""
-    sent = load_sent()
-    sent.add(filename)
-    SENT_FILE.write_text(json.dumps(sorted(sent)))
-    log.info("Marked %s as sent.", filename)
-
-
-# ---------------------------------------------------------------------------
-# Email
-# ---------------------------------------------------------------------------
-
-
-def send_email(epub_path: Path, config: configparser.ConfigParser) -> None:
-    smtp_cfg = config["smtp"]
-    to_addr = config["kindle"]["to"]
-    from_addr = smtp_cfg["from"]
-
-    msg = MIMEMultipart()
-    msg["From"] = from_addr
-    msg["To"] = to_addr
-    msg["Subject"] = "SZ ePub"
-
-    msg.attach(MIMEText("Attached is the latest Süddeutsche Zeitung ePub edition.", "plain"))
-
-    attachment = MIMEBase("application", "epub+zip")
-    attachment.set_payload(epub_path.read_bytes())
-    encoders.encode_base64(attachment)
-    attachment.add_header("Content-Disposition", f'attachment; filename="{epub_path.name}"')
-    msg.attach(attachment)
-
-    log.info("Connecting to SMTP server %s:%s …", smtp_cfg["host"], smtp_cfg["port"])
-    with smtplib.SMTP(smtp_cfg["host"], int(smtp_cfg["port"])) as server:
-        server.starttls()
-        server.login(smtp_cfg["username"], smtp_cfg["password"])
-        server.sendmail(from_addr, to_addr, msg.as_string())
-
-    log.info("Email sent to %s", to_addr)
-
-
-# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
 
 def main() -> None:
     config = load_config()
-    tokens = get_tokens(config)
 
+    from strategies import get_strategy
+    strategy = get_strategy(config)
+
+    tokens = get_tokens(config)
     epub_url = find_latest_epub_url(tokens)
 
-    # Derive filename to check if already sent.
+    # Derive filename to check if already delivered.
     qs = parse_qs(urlparse(epub_url).query)
     path_param = qs.get("path", [""])[0]
     filename = Path(path_param).name if path_param else "sz_latest.epub"
 
-    if filename in load_sent():
-        log.info("Already sent %s — nothing to do.", filename)
+    if strategy.already_delivered(filename):
+        log.info("Already delivered %s — nothing to do.", filename)
         return
 
     with tempfile.TemporaryDirectory() as tmpdir:
         epub_path = download_epub(tokens, epub_url, Path(tmpdir))
-        send_email(epub_path, config)
+        strategy.deliver(epub_path)
 
-    mark_sent(filename)
     log.info("Done.")
 
 
